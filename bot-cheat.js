@@ -7,7 +7,7 @@ const PASSWORD = '65';
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function extractTurns(text) {
-  const m = text.match(/(\d+)/);
+  const m = text.match(/TOTAL REMAINING PLAY\s*[|\n]\s*(\d+)/i);
   return m ? parseInt(m[1]) : null;
 }
 
@@ -136,7 +136,6 @@ async function playOneGame(page, gameNum, totalGames) {
     await sleep(1000);
   } catch(e) {}
 
-  page.removeListener('response', handler);
   return monitorScore;
 }
 
@@ -197,26 +196,42 @@ async function getRemainingTurns(page) {
     return;
   }
 
-  const initialTurns = turns;
-  console.log(`[BOT] Turns available: ${turns}`);
-
-  // ─── PLAY LOOP ──────────────────────────────
+  // ─── PLAY LOOP (indefinite) ─────────────────
   let totalScore = 0;
-  for (let i = 1; i <= initialTurns; i++) {
-    const score = await playOneGame(page, i, initialTurns);
-    totalScore += score;
+  let gameCount = 0;
 
+  while (true) {
     turns = await getRemainingTurns(page);
-    console.log(`[BOT] Turns remaining: ${turns}, total score this session: ${totalScore}`);
 
     if (!turns || turns <= 0) {
-      console.log('[BOT] No more turns. Stopping.');
-      break;
+      console.log('[BOT] No turns. Waiting 10 min before recheck...');
+      await sleep(600000);
+      continue;
     }
+
+    console.log(`[BOT] Turns available: ${turns}`);
+    const batchStart = gameCount + 1;
+
+    for (let i = 1; i <= turns; i++) {
+      gameCount++;
+      const score = await playOneGame(page, gameCount, '∞');
+      totalScore += score;
+
+      const remaining = await getRemainingTurns(page);
+      console.log(`[BOT] Turns remaining: ${remaining}, total score: ${totalScore}`);
+
+      if (!remaining || remaining <= 0) {
+        console.log('[BOT] No more turns in this batch.');
+        break;
+      }
+    }
+
+    console.log(`\n[BOT] Batch done. Total games: ${gameCount}, total score: ${totalScore}`);
+    console.log('[BOT] Waiting 10 min before next check...\n');
+    await sleep(600000);
   }
 
-  console.log(`\n[BOT] === DONE: played ${initialTurns} games, total score: ${totalScore} ===`);
-
+  // (unreachable)
   await browser.close();
   console.log('[BOT] Finished.');
 })();
