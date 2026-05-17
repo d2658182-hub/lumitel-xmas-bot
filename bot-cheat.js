@@ -7,7 +7,11 @@ const PASSWORD = '65';
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function extractTurns(text) {
-  const m = text.match(/TOTAL REMAINING PLAY\s*[|\n]\s*(\d+)/i);
+  // Cherche "TOTAL REMAINING PLAY" puis le premier nombre qui suit
+  const idx = text.toUpperCase().indexOf('TOTAL REMAINING PLAY');
+  if (idx === -1) return null;
+  const after = text.slice(idx + 20);
+  const m = after.match(/(\d+)/);
   return m ? parseInt(m[1]) : null;
 }
 
