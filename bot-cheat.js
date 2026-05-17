@@ -104,8 +104,6 @@ async function playOneGame(page, gameNum, totalGames) {
     window.__bot.botLoopId = setInterval(() => window.__bot.tick(), 16);
   });
 
-  let monitorScore = 0;
-  await page.exposeFunction('__botReport', (score) => { monitorScore = score; });
   await page.evaluate(() => {
     const orig = window.__bot.tick.bind(window.__bot);
     window.__bot.tick = function() { orig(); if (this.score !== this._lastReported) { this._lastReported = this.score; window.__botReport(this.score); } };
@@ -193,6 +191,10 @@ async function getRemainingTurns(page) {
   if (!loginResult || loginResult.errorCode !== '0') {
     console.log('[BOT] Connexion échouée'); await browser.close(); return;
   }
+
+  // ─── BINDING PERSISTANT (exposeFunction dure au-delà des navigations) ──
+  let monitorScore = 0;
+  await page.exposeFunction('__botReport', (score) => { monitorScore = score; });
 
   // ─── LECTURE DES TOURS INITIAUX ──────────────
   let turns = await getRemainingTurns(page);
