@@ -19,6 +19,7 @@ async function playOneGame(page, gameNum, totalGames) {
     if (resp.url().includes('/Game/SaveGame') && resp.status() === 200) {
       saveGameDone = true;
       try { console.log('[NET] Sauvegarde score:', JSON.stringify(await resp.json())); } catch(e) { console.log('[NET] Sauvegarde score: OK'); }
+    }
   };
   page.on('response', handler);
 
@@ -28,7 +29,6 @@ async function playOneGame(page, gameNum, totalGames) {
 
   if (page.url().includes('Login')) {
     console.log('[BOT] Redirigé vers la connexion - session perdue');
-    page.removeListener('response', handler);
     return 0;
   }
 
