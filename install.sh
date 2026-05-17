@@ -81,10 +81,10 @@ setup_project() {
   local DIR="$HOME/lumitel-bot"
   if [ -d "$DIR" ]; then
     info "Updating existing project at $DIR..."
-    cd "$DIR" && git pull origin "$BRANCH" 2>/dev/null || true
+    cd "$DIR" && git pull origin "$BRANCH" >/dev/null 2>&1 || true
   else
     info "Cloning repo into $DIR..."
-    git clone --depth 1 "https://github.com/$REPO.git" "$DIR" 2>/dev/null || {
+    git clone --depth 1 "https://github.com/$REPO.git" "$DIR" >/dev/null 2>&1 || {
       warn "git clone failed. Trying curl + tar..."
       mkdir -p "$DIR" && cd "$DIR"
       curl -sL "https://github.com/$REPO/archive/refs/heads/$BRANCH.tar.gz" | tar xz --strip=1
@@ -92,12 +92,9 @@ setup_project() {
     cd "$DIR"
   fi
 
-  # Install puppeteer (downloads Chromium)
   if [ ! -d "node_modules" ]; then
     info "Installing puppeteer (this may take a minute)..."
-    npm install puppeteer 2>/dev/null || warn "npm install failed. Try: cd $DIR && npm install puppeteer"
-  else
-    info "node_modules exists, skipping npm install."
+    npm install puppeteer >/dev/null 2>&1 || warn "npm install failed. Try: cd $DIR && npm install puppeteer"
   fi
   echo "$DIR"
 }
