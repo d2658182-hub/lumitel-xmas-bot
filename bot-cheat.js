@@ -17,15 +17,6 @@ function extractTurns(text) {
 
 async function playOneGame(page, gameNum, totalGames) {
   console.log(`\n[BOT] === PARTIE ${gameNum}/${totalGames} ===`);
-  let saveGameDone = false;
-
-  const handler = async resp => {
-    if (resp.url().includes('/Game/SaveGame') && resp.status() === 200) {
-      saveGameDone = true;
-      try { console.log('[NET] Sauvegarde score:', JSON.stringify(await resp.json())); } catch(e) { console.log('[NET] Sauvegarde score: OK'); }
-    }
-  };
-  page.on('response', handler);
 
   console.log('[BOT] Chargement du jeu...');
   await page.goto(GAME_URL, { waitUntil: 'networkidle0', timeout: 30000 });
@@ -36,16 +27,21 @@ async function playOneGame(page, gameNum, totalGames) {
     return 0;
   }
 
-  await page.evaluate(() => { s_bFirstPlay = false; s_bAudioActive = false; });
+  try { await page.evaluate(() => { s_bFirstPlay = false; s_bAudioActive = false; }); } catch(e) {}
+
   const cr = await page.evaluate(() => {
     const c = document.querySelector('canvas#canvas');
+    if (!c) return null;
     const r = c.getBoundingClientRect();
     return { l: r.left, t: r.top, w: r.width, h: r.height, cw: c.width, ch: c.height };
   });
+  if (!cr) { console.log('[BOT] Canvas introuvable'); return 0; }
+
   await page.mouse.click(cr.l + 960 * (cr.w / cr.cw), cr.t + 1370 * (cr.h / cr.ch));
   await sleep(3000);
 
   await page.evaluate(() => {
+    if (typeof s_oGame === 'undefined') return;
     s_oGame.startUpdate();
     window.__bot = {
       dir: null, score: 0, best: 0, tStart: performance.now(), gameContainer: null, gameOver: false,
@@ -109,11 +105,11 @@ async function playOneGame(page, gameNum, totalGames) {
   });
 
   let monitorScore = 0;
-  await page.exposeFunction('__botReport' + gameNum, (score) => { monitorScore = score; });
-  await page.evaluate((n) => {
+  await page.exposeFunction('__botReport', (score) => { monitorScore = score; });
+  await page.evaluate(() => {
     const orig = window.__bot.tick.bind(window.__bot);
-    window.__bot.tick = function() { orig(); if (this.score !== this._lastReported) { this._lastReported = this.score; window['__botReport' + n](this.score); } };
-  }, gameNum);
+    window.__bot.tick = function() { orig(); if (this.score !== this._lastReported) { this._lastReported = this.score; window.__botReport(this.score); } };
+  });
 
   const START = Date.now();
   while (Date.now() - START < 120000) {
@@ -124,7 +120,6 @@ async function playOneGame(page, gameNum, totalGames) {
       try { url = page.url(); } catch(e) {}
       console.log(`[BOT] t=${t}s score=${monitorScore}`);
     }
-    if (saveGameDone) break;
     try {
       const u = page.url();
       if (!u.includes('Playgame') && !u.includes('Login')) break;
