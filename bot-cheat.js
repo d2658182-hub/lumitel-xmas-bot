@@ -12,23 +12,22 @@ function extractTurns(text) {
 }
 
 async function playOneGame(page, gameNum, totalGames) {
-  console.log(`\n[BOT] === GAME ${gameNum}/${totalGames} ===`);
+  console.log(`\n[BOT] === PARTIE ${gameNum}/${totalGames} ===`);
   let saveGameDone = false;
 
   const handler = async resp => {
     if (resp.url().includes('/Game/SaveGame') && resp.status() === 200) {
       saveGameDone = true;
-      try { console.log('[NET] SaveGame:', JSON.stringify(await resp.json())); } catch(e) { console.log('[NET] SaveGame: OK'); }
-    }
+      try { console.log('[NET] Sauvegarde score:', JSON.stringify(await resp.json())); } catch(e) { console.log('[NET] Sauvegarde score: OK'); }
   };
   page.on('response', handler);
 
-  console.log('[BOT] Loading game...');
+  console.log('[BOT] Chargement du jeu...');
   await page.goto(GAME_URL, { waitUntil: 'networkidle0', timeout: 30000 });
   await sleep(3000);
 
   if (page.url().includes('Login')) {
-    console.log('[BOT] Redirected to login - session lost');
+    console.log('[BOT] Redirigé vers la connexion - session perdue');
     page.removeListener('response', handler);
     return 0;
   }
@@ -129,7 +128,7 @@ async function playOneGame(page, gameNum, totalGames) {
   }
 
   await sleep(2000);
-  console.log(`[BOT] Game ${gameNum} done, score=${monitorScore}`);
+  console.log(`[BOT] Partie ${gameNum} terminée, score=${monitorScore}`);
 
   try {
     await page.goto('https://xmas.lumitel.bi/Home/Index', { waitUntil: 'networkidle0', timeout: 15000 });
@@ -144,7 +143,7 @@ async function getRemainingTurns(page) {
   await sleep(2000);
   const txt = await page.evaluate(() => document.body.innerText);
   const turns = extractTurns(txt);
-  console.log('[BOT] Profile:', txt.replace(/\n+/g, ' | '));
+  console.log('[BOT] Profil:', txt.replace(/\n+/g, ' | '));
   return turns;
 }
 
@@ -163,7 +162,7 @@ async function getRemainingTurns(page) {
   });
 
   // ─── LOGIN ──────────────────────────────────
-  console.log('[BOT] Loading login page...');
+  console.log('[BOT] Chargement de la page de connexion...');
   await page.goto(LOGIN_URL, { waitUntil: 'networkidle0', timeout: 30000 });
   await sleep(2000);
   const csrf = await page.evaluate(() => document.querySelector('input[name=__RequestVerificationToken]')?.value);
@@ -183,20 +182,20 @@ async function getRemainingTurns(page) {
     });
   }, csrf);
 
-  console.log('[BOT] Login:', JSON.stringify(loginResult));
+  console.log('[BOT] Connexion:', JSON.stringify(loginResult));
   if (!loginResult || loginResult.errorCode !== '0') {
-    console.log('[BOT] Login failed'); await browser.close(); return;
+    console.log('[BOT] Connexion échouée'); await browser.close(); return;
   }
 
-  // ─── READ INITIAL TURNS ──────────────────────
+  // ─── LECTURE DES TOURS INITIAUX ──────────────
   let turns = await getRemainingTurns(page);
   if (turns === null || turns === 0) {
-    console.log('[BOT] No turns remaining. Exiting.');
+    console.log('[BOT] Aucun tour restant. Arrêt.');
     await browser.close();
     return;
   }
 
-  // ─── PLAY LOOP (indefinite) ─────────────────
+  // ─── BOUCLE DE JEU (indéfinie) ──────────────
   let totalScore = 0;
   let gameCount = 0;
 
@@ -204,12 +203,12 @@ async function getRemainingTurns(page) {
     turns = await getRemainingTurns(page);
 
     if (!turns || turns <= 0) {
-      console.log('[BOT] No turns. Waiting 10 min before recheck...');
+      console.log('[BOT] Aucun tour. Attente 10 min avant de revérifier...');
       await sleep(600000);
       continue;
     }
 
-    console.log(`[BOT] Turns available: ${turns}`);
+    console.log(`[BOT] Tours disponibles: ${turns}`);
     const batchStart = gameCount + 1;
 
     for (let i = 1; i <= turns; i++) {
@@ -218,20 +217,20 @@ async function getRemainingTurns(page) {
       totalScore += score;
 
       const remaining = await getRemainingTurns(page);
-      console.log(`[BOT] Turns remaining: ${remaining}, total score: ${totalScore}`);
+      console.log(`[BOT] Tours restants: ${remaining}, score total: ${totalScore}`);
 
       if (!remaining || remaining <= 0) {
-        console.log('[BOT] No more turns in this batch.');
+        console.log('[BOT] Plus de tours dans ce lot.');
         break;
       }
     }
 
-    console.log(`\n[BOT] Batch done. Total games: ${gameCount}, total score: ${totalScore}`);
-    console.log('[BOT] Waiting 10 min before next check...\n');
+    console.log(`\n[BOT] Lot terminé. Parties: ${gameCount}, score total: ${totalScore}`);
+    console.log('[BOT] Attente 10 min avant prochaine vérification...\n');
     await sleep(600000);
   }
 
   // (unreachable)
   await browser.close();
-  console.log('[BOT] Finished.');
+  console.log('[BOT] Terminé.');
 })();
