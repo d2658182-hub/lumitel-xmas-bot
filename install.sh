@@ -6,13 +6,13 @@ BRANCH="master"
 BOT_FILE="bot-cheat.js"
 
 R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; B='\033[0;34m'; N='\033[0m'
-info()  { echo -e "${G}[+]${N} $*"; }
-warn()  { echo -e "${Y}[!]${N} $*"; }
+info()  { echo -e "${G}[+]${N} $*" >&2; }
+warn()  { echo -e "${Y}[!]${N} $*" >&2; }
 err()   { echo -e "${R}[✗]${N} $*" >&2; }
 
 check_sudo() {
   if ! command -v sudo &>/dev/null; then
-    echo ""; return 1
+    return 1
   fi
   if sudo -n true 2>/dev/null; then
     return 0
