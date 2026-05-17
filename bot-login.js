@@ -111,6 +111,7 @@ async function playOneGame(page, gameNum, totalGames) {
   });
 
   const START = Date.now();
+  let detectedRedirect = false;
   while (Date.now() - START < 120000) {
     await sleep(1000);
     const t = Math.round((Date.now() - START) / 1000);
@@ -121,7 +122,14 @@ async function playOneGame(page, gameNum, totalGames) {
     }
     try {
       const u = page.url();
-      if (!u.includes('Playgame') && !u.includes('Login')) break;
+      if (!u.includes('Playgame') && !u.includes('Login')) {
+        if (!detectedRedirect) {
+          detectedRedirect = true;
+          console.log('[BOT] Redirect détecté, pause 6s pour finaliser SaveGame...');
+          await sleep(6000);
+        }
+        break;
+      }
     } catch(e) { break; }
   }
 
@@ -201,16 +209,24 @@ async function getRemainingTurns(page) {
     }
 
     console.log(`[BOT] Tours disponibles: ${turns}`);
+    const maxGames = turns;
 
-    for (let i = 1; i <= turns; i++) {
+    for (let i = 1; i <= maxGames; i++) {
       gameCount++;
       const score = await playOneGame(page, gameCount, '∞');
       totalScore += score;
 
-      const remaining = await getRemainingTurns(page);
-      console.log(`[BOT] Tours restants: ${remaining}, score total: ${totalScore}`);
+      let remaining = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        remaining = await getRemainingTurns(page);
+        if (remaining !== null && remaining < turns) break;
+        console.log('[BOT] Tour pas encore décompté, nouvelle tentative...');
+        await sleep(3000);
+      }
+      turns = remaining || 0;
+      console.log(`[BOT] Tours restants: ${turns}, score total: ${totalScore}`);
 
-      if (!remaining || remaining <= 0) {
+      if (turns <= 0) {
         console.log('[BOT] Plus de tours dans ce lot.');
         break;
       }
