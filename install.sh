@@ -1,159 +1,156 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ──────────────────────────────────────────────────
-# install.sh — Auto-install + launch lumitel-xmas-bot
-# Works on: Debian, Ubuntu, Fedora, RHEL, Arch, Alpine, macOS
-# Usage:
-#   curl -sL https://git.io/xxx | bash
-#   # or:
-#   bash install.sh
-# ──────────────────────────────────────────────────
-
 REPO="d2658182-hub/lumitel-xmas-bot"
 BRANCH="master"
 BOT_FILE="bot-cheat.js"
 
-# ─── Colors ─────────────────────────────────────
 R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; B='\033[0;34m'; N='\033[0m'
-
 info()  { echo -e "${G}[+]${N} $*"; }
 warn()  { echo -e "${Y}[!]${N} $*"; }
 err()   { echo -e "${R}[✗]${N} $*" >&2; }
 
-# ─── Detect package manager ────────────────────
+check_sudo() {
+  if ! command -v sudo &>/dev/null; then
+    echo ""; return 1
+  fi
+  if sudo -n true 2>/dev/null; then
+    return 0
+  fi
+  # sudo exists but needs password
+  return 2
+}
+
 detect_pm() {
-  for pm in apt-get dnf pacman apk brew zypper emerge xbps-install; do
-    if command -v "$pm" &>/dev/null; then
-      echo "$pm"
-      return
-    fi
+  for pm in apt-get dnf pacman apk brew; do
+    command -v "$pm" &>/dev/null && { echo "$pm"; return; }
   done
   echo ""
 }
 
-PM=$(detect_pm)
-if [ -z "$PM" ] && [ "$(uname)" != "Darwin" ]; then
-  err "No known package manager found."
-  exit 1
-fi
-
-# ─── Install system deps (Linux only) ──────────
-install_deps() {
-  info "Installing system dependencies..."
-
-  case "$PM" in
-    apt-get)
-      sudo apt-get update -qq
-      sudo apt-get install -y -qq curl git tmux nodejs npm ca-certificates \
-        libnss3 libatk-bridge2.0-0 libdrm2 libgbm1 libxkbcommon0 libxcomposite1 \
-        libxdamage1 libxrandr2 libxshmfence1 libasound2 2>/dev/null
-      # Node may be too old on apt; fix via nvm below
-      ;;
-    dnf)
-      sudo dnf install -y curl git tmux nodejs npm nss atk at-spi2-atk \
-        libdrm mesa-libgbm libxkbcommon libXcomposite libXdamage libXrandr \
-        libxshmfence alsa-lib 2>/dev/null
-      ;;
-    pacman)
-      sudo pacman -Sy --noconfirm curl git tmux nodejs npm nss atk at-spi2-atk \
-        libdrm libxkbcommon libxcomposite libxdamage libxrandr alsa-lib 2>/dev/null
-      ;;
-    apk)
-      sudo apk add curl git tmux nodejs npm nss atk at-spi2-atk libdrm \
-        libxkbcommon libxcomposite libxdamage libxrandr 2>/dev/null
-      ;;
-    brew)
-      brew install curl git tmux nodejs npm 2>/dev/null || true
-      ;;
-    *)
-      warn "Unknown PM: $PM. Installing just node/tmux..."
-      ;;
-  esac
-
-  # Ensure Node >= 18 via nvm if too old
-  if command -v node &>/dev/null; then
-    NODE_MAJOR=$(node -e "console.log(process.version.slice(1).split('.')[0])")
-    if [ "$NODE_MAJOR" -lt 18 ]; then
-      info "Node $NODE_MAJOR too old. Installing Node 20 via nvm..."
-      curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-      export NVM_DIR="$HOME/.nvm"
-      [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-      nvm install 20
-      nvm alias default 20
-    fi
+install_node_and_git() {
+  if ! command -v node &>/dev/null || [ "$(node -e "console.log(process.version.slice(1).split('.')[0])")" -lt 18 ]; then
+    info "Installing Node.js 20 via nvm..."
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+    nvm install 20
+    nvm alias default 20
   fi
-
-  # Install tmux if missing
-  if ! command -v tmux &>/dev/null; then
-    info "Installing tmux..."
-    case "$PM" in
-      apt-get) sudo apt-get install -y -qq tmux ;;
-      dnf)     sudo dnf install -y tmux ;;
-      pacman)  sudo pacman -Sy --noconfirm tmux ;;
-      apk)     sudo apk add tmux ;;
-      brew)    brew install tmux ;;
-    esac
-  fi
+  command -v git &>/dev/null || { warn "git not found. Please install git manually."; exit 1; }
 }
 
-# ─── Setup project ─────────────────────────────
+install_deps() {
+  info "Detecting package manager..."
+  PM=$(detect_pm)
+  echo "  → $PM"
+
+  check_sudo; SUDO_OK=$?
+
+  if [ "$SUDO_OK" = 0 ] && [ -n "$PM" ] && [ "$PM" != "brew" ]; then
+    info "Installing dependencies via $PM..."
+    case "$PM" in
+      apt-get)
+        sudo apt-get update -qq 2>/dev/null || true
+        sudo apt-get install -y curl git tmux ca-certificates 2>/dev/null || true
+        sudo apt-get install -y libnss3 libatk-bridge2.0-0 libdrm2 libgbm1 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libxshmfence1 libasound2 2>/dev/null || true
+        ;;
+      dnf)
+        sudo dnf install -y curl git tmux nss atk at-spi2-atk libdrm mesa-libgbm libxkbcommon libXcomposite libXdamage libXrandr libxshmfence alsa-lib 2>/dev/null || true
+        ;;
+      pacman)
+        sudo pacman -Sy --noconfirm curl git tmux nss atk at-spi2-atk libdrm libxkbcommon libxcomposite libxdamage libxrandr alsa-lib 2>/dev/null || true
+        ;;
+      apk)
+        sudo apk add curl git tmux nss atk at-spi2-atk libdrm libxkbcommon libxcomposite libxdamage libxrandr 2>/dev/null || true
+        ;;
+    esac
+  elif [ "$SUDO_OK" = 2 ]; then
+    warn "sudo requires a password. Run this script with: curl ... | bash"
+    warn "Or manually install: curl git tmux, plus Chromium deps for your OS."
+  fi
+
+  # tmux
+  command -v tmux &>/dev/null || warn "tmux not found. Install it manually."
+
+  # Node + git
+  install_node_and_git
+}
+
 setup_project() {
   local DIR="$HOME/lumitel-bot"
   if [ -d "$DIR" ]; then
-    info "Project already exists at $DIR, updating..."
-    cd "$DIR"
-    git pull origin "$BRANCH" 2>/dev/null || true
+    info "Updating existing project at $DIR..."
+    cd "$DIR" && git pull origin "$BRANCH" 2>/dev/null || true
   else
-    info "Cloning repo..."
-    git clone --depth 1 "https://github.com/$REPO.git" "$DIR"
+    info "Cloning repo into $DIR..."
+    git clone --depth 1 "https://github.com/$REPO.git" "$DIR" 2>/dev/null || {
+      warn "git clone failed. Trying curl + tar..."
+      mkdir -p "$DIR" && cd "$DIR"
+      curl -sL "https://github.com/$REPO/archive/refs/heads/$BRANCH.tar.gz" | tar xz --strip=1
+    }
     cd "$DIR"
   fi
 
-  info "Installing Node dependencies..."
-  npm install puppeteu 2>/dev/null || npm install puppeteer 2>/dev/null || npm install /tmp/opencode/node_modules/puppeteer 2>/dev/null || true
-
-  # If puppeteer is not in node_modules, install it
-  if [ ! -d "node_modules/puppeteer" ] && [ ! -d "node_modules/puppeteer-core" ]; then
-    info "Installing puppeteer (this downloads Chromium)..."
-    PUPPETEER_SKIP_DOWNLOAD=true npm install puppeteer
-    # Check if Chromium is available via system or npx
-    if ! command -v chromium &>/dev/null && ! command -v chromium-browser &>/dev/null && ! command -v google-chrome &>/dev/null; then
-      info "No system Chrome found. Installing Chromium via npx..."
-      npx @puppeteer/browsers install chrome 2>/dev/null || true
-    fi
+  # Install puppeteer (downloads Chromium)
+  if [ ! -d "node_modules" ]; then
+    info "Installing puppeteer (this may take a minute)..."
+    npm install puppeteer 2>/dev/null || warn "npm install failed. Try: cd $DIR && npm install puppeteer"
+  else
+    info "node_modules exists, skipping npm install."
   fi
-
   echo "$DIR"
 }
 
-# ─── Launch in tmux ────────────────────────────
 launch_tmux() {
   local DIR="$1"
   local SESSION="lumitel-bot"
+  local LOG="$DIR/bot.log"
 
-  if tmux has-session -t "$SESSION" 2>/dev/null; then
-    warn "Session '$SESSION' already exists. Attach with: tmux attach -t $SESSION"
-    return
-  fi
+  tmux kill-session -t "$SESSION" 2>/dev/null || true
 
-  tmux new-session -d -s "$SESSION" -c "$DIR" "node $BOT_FILE 2>&1 | tee -a bot.log"
+  # Start the bot logging to file
+  cd "$DIR"
+
+  # Create new session with 3 panels
+  tmux new-session -d -s "$SESSION" -n bot -x 120 -y 40
+
+  # Left panel (65%): bot output
+  tmux send-keys -t "$SESSION" "node $BOT_FILE 2>&1 | tee $LOG" Enter
+
+  # Wait for bot to start
+  sleep 4
+
+  # Right panel (35%): stats summary, refreshes every 4s
+  tmux split-window -h -t "$SESSION" -p 35
+  tmux send-keys -t "$SESSION" "while true; do clear; echo '═══════ STATS ═══════'; echo \" Uptime    : \$(ps -o etime= -C node 2>/dev/null || echo 'N/A')\"; echo '── Last score lines ──'; grep -E 'score|Game|Tour|turns|SaveGame' \"$LOG\" 2>/dev/null | tail -8; echo ''; echo '── Last 3 lines ──'; tail -3 \"$LOG\" 2>/dev/null; sleep 4; done" Enter
+
+  # Bottom-right panel: tail -f
+  tmux split-window -v -t "$SESSION" -p 50
+  tmux send-keys -t "$SESSION" "sleep 6 && tail -f $LOG" Enter
+
+  # Focus left panel
+  tmux select-pane -t "$SESSION":0.0
+
+  echo ""
   info "Bot launched in tmux session '$SESSION'."
   echo ""
   echo -e "  ${B}Commands:${N}"
-  echo -e "    ${G}tmux attach -t $SESSION${N}    → View live output"
-  echo -e "    ${G}tmux detach${N}                → Exit session (Ctrl+B, D)"
+  echo -e "    ${G}tmux attach -t $SESSION${N}       → See dashboard"
+  echo -e "    ${G}Ctrl+B then D${N}                  → Detach (bot keeps running)"
   echo -e "    ${G}tmux kill-session -t $SESSION${N}  → Stop bot"
-  echo -e "    ${G}tail -f $DIR/bot.log${N}       → View logs without tmux"
+  echo -e "    ${G}tail -f $LOG${N}                   → View logs (no tmux)"
 }
 
-# ─── Main ──────────────────────────────────────
 main() {
-  echo ""
+  clear
   echo -e "  ${B}╔══════════════════════════╗${N}"
   echo -e "  ${B}║   Lumitel Xmas Bot Setup ║${N}"
   echo -e "  ${B}╚══════════════════════════╝${N}"
   echo ""
+
+  # Check prerequisites
+  command -v curl &>/dev/null || { err "curl is required."; exit 1; }
 
   install_deps
   local DIR
@@ -161,7 +158,7 @@ main() {
   launch_tmux "$DIR"
 
   echo ""
-  info "Done! Bot is running in background."
+  info "Run 'tmux attach -t lumitel-bot' to view the dashboard."
 }
 
 main "$@"
