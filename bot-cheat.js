@@ -50,8 +50,6 @@ async function playOneGame(page, gameNum, totalGames) {
   await sleep(3000);
 
   await page.evaluate(() => {
-    if (typeof s_oGame === 'undefined') return;
-    s_oGame.startUpdate();
     window.__bot = {
       dir: null, score: 0, best: 0, tStart: performance.now(), gameContainer: null, gameOver: false,
       findGameContainer() {
