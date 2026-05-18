@@ -201,7 +201,7 @@ async function getRemainingTurns(page) {
   }
 
   // ─── BINDING PERSISTANT (exposeFunction dure au-delà des navigations) ──
-  await page.exposeFunction('__botReport', (score) => { monitorScore = score; });
+  await page.exposeFunction('__botReport', (score) => { monitorScore = Number(score); });
 
   // ─── BOUCLE DE JEU (indéfinie) ──────────────
   let totalScore = 0;
