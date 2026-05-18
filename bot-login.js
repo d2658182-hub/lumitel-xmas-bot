@@ -235,6 +235,14 @@ async function getRemainingTurns(page) {
     }
 
     console.log(`\n[BOT] Lot terminé. Parties: ${gameCount}, score total: ${totalScore}`);
+
+    // Si le serveur n'a pas consommé tous les tours, on enchaîne sans attendre
+    const stillAvailable = await getRemainingTurns(page);
+    if (stillAvailable && stillAvailable > 0) {
+      console.log('[BOT] Tours encore disponibles, on continue sans attendre.');
+      continue;
+    }
+
     console.log('[BOT] Attente 10 min avant prochaine vérification...\n');
     await sleep(600000);
   }
