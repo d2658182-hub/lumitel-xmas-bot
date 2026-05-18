@@ -5,6 +5,7 @@ const MSISDN = '65107143';
 const PASSWORD = '65';
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+let monitorScore = 0;
 
 function extractTurns(text) {
   const u = text.toUpperCase();
@@ -143,16 +144,17 @@ async function playOneGame(page, gameNum, totalGames) {
   await sleep(2000);
   console.log(`[BOT] Partie ${gameNum} terminée, score=${monitorScore}`);
 
-  try {
-    await page.goto('https://xmas.lumitel.bi/Home/Index', { waitUntil: 'networkidle0', timeout: 15000 });
-    await sleep(1000);
-  } catch(e) {}
-
   return monitorScore;
 }
 
 async function getRemainingTurns(page) {
-  await page.goto('https://xmas.lumitel.bi/Game/ViewProfile', { waitUntil: 'networkidle0', timeout: 20000 });
+  try {
+    await page.goto('https://xmas.lumitel.bi/Game/ViewProfile', { waitUntil: 'networkidle0', timeout: 20000 });
+  } catch(e) {
+    console.log('[BOT] Navigation interrompue, tentative avec Home/Index...');
+    try { await page.goto('https://xmas.lumitel.bi/Home/Index', { timeout: 10000 }); } catch(e2) {}
+    return null;
+  }
   await sleep(2000);
   const txt = await page.evaluate(() => document.body.innerText);
   const turns = extractTurns(txt);
@@ -201,7 +203,6 @@ async function getRemainingTurns(page) {
   }
 
   // ─── BINDING PERSISTANT (exposeFunction dure au-delà des navigations) ──
-  let monitorScore = 0;
   await page.exposeFunction('__botReport', (score) => { monitorScore = score; });
 
   // ─── BOUCLE DE JEU (indéfinie) ──────────────
