@@ -7,11 +7,20 @@ const PASSWORD = '65';
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function extractTurns(text) {
-  const idx = text.toUpperCase().indexOf('TOTAL REMAINING PLAY');
-  if (idx === -1) return null;
-  const after = text.slice(idx + 20);
-  const m = after.match(/(\d+)/);
-  return m ? parseInt(m[1]) : null;
+  const u = text.toUpperCase();
+  const patterns = ['TOTAL REMAINING PLAY', 'REMAINING PLAY', 'TOTAL PLAY', 'TOURS RESTANTS', 'REMAINING'];
+  for (const p of patterns) {
+    const idx = u.indexOf(p);
+    if (idx !== -1) {
+      const after = text.slice(idx + p.length);
+      const m = after.match(/(\d+)/);
+      if (m) return parseInt(m[1]);
+    }
+  }
+  // fallback: cherche n'importe quel nombre dans le texte
+  const all = text.match(/(\d+)/g);
+  if (all) return parseInt(all[0]);
+  return null;
 }
 
 async function playOneGame(page, gameNum, totalGames) {
@@ -189,20 +198,12 @@ async function getRemainingTurns(page) {
   let monitorScore = 0;
   await page.exposeFunction('__botReport', (score) => { monitorScore = score; });
 
-  // ─── LECTURE DES TOURS INITIAUX ──────────────
-  let turns = await getRemainingTurns(page);
-  if (turns === null || turns === 0) {
-    console.log('[BOT] Aucun tour restant. Arrêt.');
-    await browser.close();
-    return;
-  }
-
   // ─── BOUCLE DE JEU (indéfinie) ──────────────
   let totalScore = 0;
   let gameCount = 0;
 
   while (true) {
-    turns = await getRemainingTurns(page);
+    let turns = await getRemainingTurns(page);
 
     if (!turns || turns <= 0) {
       console.log('[BOT] Aucun tour. Attente 10 min avant de revérifier...');
